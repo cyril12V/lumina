@@ -43,7 +43,7 @@ interface AuditLogParams {
   metadata?: Record<string, unknown>;
 }
 
-function logAudit(params: AuditLogParams): AuditLog {
+async function logAudit(params: AuditLogParams): Promise<AuditLog> {
   const id = uuidv4();
   const metadataJson = params.metadata ? JSON.stringify(params.metadata) : null;
 
@@ -52,7 +52,7 @@ function logAudit(params: AuditLogParams): AuditLog {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
-  stmt.run(
+  await stmt.run(
     id,
     params.clientLinkId || null,
     params.userId || null,
@@ -87,10 +87,10 @@ export const auditService = {
   /**
    * Log from Express request
    */
-  logFromRequest(
+  async logFromRequest(
     req: { ip?: string; headers: Record<string, string | string[] | undefined> },
     params: Omit<AuditLogParams, 'ipAddress' | 'userAgent'>
-  ): AuditLog {
+  ): Promise<AuditLog> {
     return logAudit({
       ...params,
       ipAddress: req.ip || req.headers['x-forwarded-for']?.toString() || 'unknown',
@@ -101,52 +101,52 @@ export const auditService = {
   /**
    * Get audit trail for a client link
    */
-  getByClientLink(clientLinkId: string): AuditLog[] {
+  async getByClientLink(clientLinkId: string): Promise<AuditLog[]> {
     const stmt = db.prepare(`
       SELECT * FROM audit_logs
       WHERE client_link_id = ?
       ORDER BY created_at DESC
     `);
-    return stmt.all(clientLinkId) as AuditLog[];
+    return await stmt.all(clientLinkId) as AuditLog[];
   },
 
   /**
    * Get audit trail for a user (photographer)
    */
-  getByUser(userId: string, limit = 100): AuditLog[] {
+  async getByUser(userId: string, limit = 100): Promise<AuditLog[]> {
     const stmt = db.prepare(`
       SELECT * FROM audit_logs
       WHERE user_id = ?
       ORDER BY created_at DESC
       LIMIT ?
     `);
-    return stmt.all(userId, limit) as AuditLog[];
+    return await stmt.all(userId, limit) as AuditLog[];
   },
 
   /**
    * Get audit trail for a specific entity
    */
-  getByEntity(entityType: string, entityId: string): AuditLog[] {
+  async getByEntity(entityType: string, entityId: string): Promise<AuditLog[]> {
     const stmt = db.prepare(`
       SELECT * FROM audit_logs
       WHERE entity_type = ? AND entity_id = ?
       ORDER BY created_at DESC
     `);
-    return stmt.all(entityType, entityId) as AuditLog[];
+    return await stmt.all(entityType, entityId) as AuditLog[];
   },
 
   /**
    * Export audit trail for GDPR compliance
    */
-  exportForClient(clientLinkId: string): {
+  async exportForClient(clientLinkId: string): Promise<{
     logs: AuditLog[];
     exportedAt: string;
     clientLinkId: string;
-  } {
-    const logs = this.getByClientLink(clientLinkId);
+  }> {
+    const logs = await this.getByClientLink(clientLinkId);
 
     // Log the export action
-    logAudit({
+    await logAudit({
       clientLinkId,
       action: 'data_exported',
       metadata: { logsCount: logs.length }
@@ -162,12 +162,12 @@ export const auditService = {
   /**
    * Get signature audit trail (for legal proof)
    */
-  getSignatureAuditTrail(contractId: string): {
+  async getSignatureAuditTrail(contractId: string): Promise<{
     contract: AuditLog[];
     signature: AuditLog[];
-  } {
-    const contractLogs = this.getByEntity('contract', contractId);
-    const signatureLogs = this.getByEntity('signature', contractId);
+  }> {
+    const contractLogs = await this.getByEntity('contract', contractId);
+    const signatureLogs = await this.getByEntity('signature', contractId);
 
     return {
       contract: contractLogs,
@@ -178,7 +178,7 @@ export const auditService = {
   /**
    * Clean old logs (for GDPR - data minimization)
    */
-  cleanOldLogs(olderThanYears = 5): number {
+  async cleanOldLogs(olderThanYears = 5): Promise<number> {
     const cutoffDate = new Date();
     cutoffDate.setFullYear(cutoffDate.getFullYear() - olderThanYears);
 
@@ -186,7 +186,7 @@ export const auditService = {
       DELETE FROM audit_logs
       WHERE created_at < ?
     `);
-    const result = stmt.run(cutoffDate.toISOString());
+    const result = await stmt.run(cutoffDate.toISOString());
     return result.changes;
   }
 };
