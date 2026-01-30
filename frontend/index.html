@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lumina | L'Artisanat du Workflow Photographique</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Urbanist:ital,wght@0,100..900;1,100..900&family=Fraunces:ital,opsz,wght@0,9..144,100..900;1,9..144,100..900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #FCFBF7;
+            --bg-secondary: #F3F2EE;
+            --accent: #2D3FE7;
+            --text-main: #1A1A1A;
+            --text-soft: #666666;
+        }
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-main);
+            scroll-behavior: smooth;
+        }
+        h1, h2, h3, h4, .font-display {
+            font-family: 'Urbanist', sans-serif;
+            font-weight: 800;
+        }
+        .font-serif {
+            font-family: 'Fraunces', serif;
+        }
+        .text-vibrant {
+            color: var(--accent);
+        }
+        .bg-vibrant {
+            background-color: var(--accent);
+        }
+        .border-vibrant {
+            border-color: var(--accent);
+        }
+        .glass {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(45, 63, 231, 0.1);
+        }
+        .grain {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 50;
+            opacity: 0.03;
+            background-image: url('https://grainy-gradients.vercel.app/noise.svg');
+        }
+        .glow {
+            position: absolute;
+            width: 50vw;
+            height: 50vw;
+            background: radial-gradient(circle, rgba(45, 63, 231, 0.08) 0%, rgba(45, 63, 231, 0) 70%);
+            border-radius: 50%;
+            z-index: 0;
+            filter: blur(80px);
+        }
+    </style>
+</head>
+<body class="antialiased">
+    <div class="grain"></div>
+    <div id="root"></div>
+    <script type="module" src="/src/index.tsx"></script>
+</body>
+</html>
