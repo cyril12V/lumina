@@ -10,7 +10,7 @@ export interface ClientLink {
   template_id: string | null;
   token: string;
   expires_at: string | null;
-  is_revoked: number | boolean;
+  is_revoked: number;
   created_at: string;
   last_accessed_at: string | null;
 }
@@ -28,7 +28,7 @@ export const tokenService = {
   /**
    * Create a new client link
    */
-  async createLink(clientId: string, userId: string, expiresInDays?: number, eventTypeId?: string, templateId?: string): Promise<ClientLink> {
+  createLink(clientId: string, userId: string, expiresInDays?: number, eventTypeId?: string, templateId?: string): ClientLink {
     const id = uuidv4();
     const token = this.generate();
     const expiresAt = expiresInDays
@@ -40,7 +40,7 @@ export const tokenService = {
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
 
-    await stmt.run(id, clientId, userId, eventTypeId || null, templateId || null, token, expiresAt);
+    stmt.run(id, clientId, userId, eventTypeId || null, templateId || null, token, expiresAt);
 
     return {
       id,
@@ -59,11 +59,11 @@ export const tokenService = {
   /**
    * Validate a token and return the client link if valid
    */
-  async validate(token: string): Promise<ClientLink | null> {
+  validate(token: string): ClientLink | null {
     const stmt = db.prepare(`
       SELECT * FROM client_links WHERE token = ?
     `);
-    const link = await stmt.get(token) as ClientLink | undefined;
+    const link = stmt.get(token) as ClientLink | undefined;
 
     if (!link) return null;
     if (link.is_revoked) return null;
@@ -71,9 +71,9 @@ export const tokenService = {
 
     // Update last accessed
     const updateStmt = db.prepare(`
-      UPDATE client_links SET last_accessed_at = NOW() WHERE id = ?
+      UPDATE client_links SET last_accessed_at = datetime('now') WHERE id = ?
     `);
-    await updateStmt.run(link.id);
+    updateStmt.run(link.id);
 
     return link;
   },
@@ -81,52 +81,50 @@ export const tokenService = {
   /**
    * Get link by client ID
    */
-  async getByClientId(clientId: string): Promise<ClientLink | null> {
+  getByClientId(clientId: string): ClientLink | null {
     const stmt = db.prepare(`
       SELECT * FROM client_links
-      WHERE client_id = ? AND is_revoked = false
+      WHERE client_id = ? AND is_revoked = 0
       ORDER BY created_at DESC
       LIMIT 1
     `);
-    const result = await stmt.get(clientId);
-    return result as ClientLink | null;
+    return stmt.get(clientId) as ClientLink | null;
   },
 
   /**
    * Get link by ID
    */
-  async getById(id: string): Promise<ClientLink | null> {
+  getById(id: string): ClientLink | null {
     const stmt = db.prepare(`SELECT * FROM client_links WHERE id = ?`);
-    const result = await stmt.get(id);
-    return result as ClientLink | null;
+    return stmt.get(id) as ClientLink | null;
   },
 
   /**
    * Revoke a client link
    */
-  async revoke(linkId: string): Promise<boolean> {
+  revoke(linkId: string): boolean {
     const stmt = db.prepare(`
-      UPDATE client_links SET is_revoked = true WHERE id = ?
+      UPDATE client_links SET is_revoked = 1 WHERE id = ?
     `);
-    const result = await stmt.run(linkId);
+    const result = stmt.run(linkId);
     return result.changes > 0;
   },
 
   /**
    * Revoke all links for a client
    */
-  async revokeAllForClient(clientId: string): Promise<number> {
+  revokeAllForClient(clientId: string): number {
     const stmt = db.prepare(`
-      UPDATE client_links SET is_revoked = true WHERE client_id = ?
+      UPDATE client_links SET is_revoked = 1 WHERE client_id = ?
     `);
-    const result = await stmt.run(clientId);
+    const result = stmt.run(clientId);
     return result.changes;
   },
 
   /**
    * Update link expiration
    */
-  async updateExpiration(linkId: string, expiresInDays: number | null): Promise<boolean> {
+  updateExpiration(linkId: string, expiresInDays: number | null): boolean {
     const expiresAt = expiresInDays
       ? new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000).toISOString()
       : null;
@@ -134,14 +132,14 @@ export const tokenService = {
     const stmt = db.prepare(`
       UPDATE client_links SET expires_at = ? WHERE id = ?
     `);
-    const result = await stmt.run(expiresAt, linkId);
+    const result = stmt.run(expiresAt, linkId);
     return result.changes > 0;
   },
 
   /**
    * Get all links for a user (photographer)
    */
-  async getAllForUser(userId: string): Promise<ClientLink[]> {
+  getAllForUser(userId: string): ClientLink[] {
     const stmt = db.prepare(`
       SELECT cl.*, c.name as client_name, c.email as client_email
       FROM client_links cl
@@ -149,8 +147,7 @@ export const tokenService = {
       WHERE cl.user_id = ?
       ORDER BY cl.created_at DESC
     `);
-    const result = await stmt.all(userId);
-    return result as ClientLink[];
+    return stmt.all(userId) as ClientLink[];
   }
 };
 
