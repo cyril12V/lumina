@@ -45,6 +45,8 @@ services:
       - key: JWT_SECRET
         generateValue: true
 
-      # URL publique du frontend, utilisée pour le CORS et les liens des emails.
+      # Le site étant servi par ce même service, renseigner ici l'URL Render
+      # elle-même (ex. https://lumina-api.onrender.com). Sert aux liens
+      # contenus dans les emails. Peut rester vide au premier déploiement.
       - key: FRONTEND_URL
         sync: false
