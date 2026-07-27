@@ -39,7 +39,7 @@ jeton porteur (Supabase Storage convient tel quel). Noter :
 
 ### 2. API sur Render
 
-[backend/render.yaml](backend/render.yaml) est prêt (`plan: free`, `rootDir: backend`).
+[render.yaml](render.yaml) est prêt (`plan: free`, `rootDir: backend`).
 Renseigner dans le dashboard les variables marquées `sync: false` :
 
 | Variable | Valeur |
