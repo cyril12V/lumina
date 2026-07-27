@@ -6,7 +6,10 @@ services:
     # Le service vit dans backend/ : sans rootDir, Render exécute les commandes
     # à la racine du dépôt et ne trouve ni les dépendances ni dist/index.js.
     rootDir: backend
-    buildCommand: npm ci && npm run build
+    # --include=dev est indispensable : Render injecte NODE_ENV=production dès le
+    # build, ce qui pousse npm à écarter les devDependencies — dont TypeScript,
+    # nécessaire à `npm run build`.
+    buildCommand: npm ci --include=dev && npm run build
     startCommand: node dist/index.js
     healthCheckPath: /api/health
 
