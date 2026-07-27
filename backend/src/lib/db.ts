@@ -1,58 +1,90 @@
-import fs from 'fs';
 import path from 'path';
 import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
 import initSqlJs, { type Database, type SqlValue } from 'sql.js';
 
 import { SCHEMA_SQL } from './schema.js';
+import { LocalFileStore, RemoteHttpStore, type SnapshotStore } from './snapshot-store.js';
 
 /**
- * Adaptateur SQLite (sql.js) exposant une API synchrone :
+ * Adaptateur SQLite (sql.js) exposant une API **synchrone** :
  *   db.prepare(sql).run(...) / .get(...) / .all(...)
  *
- * sql.js travaille en mémoire : chaque écriture programme une sauvegarde
- * différée du fichier `data/lumina.db` (écriture atomique), avec un flush
- * garanti à l'arrêt du process.
+ * La base tient entièrement en mémoire ; seules les sauvegardes sont
+ * asynchrones. C'est ce qui permet de tourner sur un hébergement gratuit au
+ * système de fichiers éphémère sans transformer les 100+ appels des routes en
+ * appels asynchrones.
+ *
+ * Contrainte : une seule instance à la fois. Deux conteneurs partageant le même
+ * instantané s'écraseraient mutuellement — ne pas activer l'autoscaling.
  */
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 
 /**
- * `DATABASE_PATH` permet de pointer vers un volume persistant (Docker, disque Render).
- * Sans elle, on retombe sur `backend/data/` — le chemin se résout aussi bien depuis
- * `src/lib` (tsx) que depuis `dist/lib` (build compilé).
+ * `DATABASE_REMOTE_URL` (+ `DATABASE_REMOTE_TOKEN`) bascule sur un stockage objet
+ * distant. Sinon on écrit sur disque : `DATABASE_PATH`, ou `backend/data/` par
+ * défaut — chemin qui se résout aussi bien depuis `src/lib` (tsx) que depuis
+ * `dist/lib` (build compilé).
  */
+const REMOTE_URL = process.env.DATABASE_REMOTE_URL;
 const DB_FILE = process.env.DATABASE_PATH
   ? path.resolve(process.env.DATABASE_PATH)
   : path.resolve(__dirname, '..', '..', 'data', 'lumina.db');
-const DATA_DIR = path.dirname(DB_FILE);
-const SAVE_DEBOUNCE_MS = 100;
+
+/** Le distant est plus lent et facturé à la requête : on espace davantage. */
+const SAVE_DEBOUNCE_MS = Number(process.env.DATABASE_SAVE_DEBOUNCE_MS) || (REMOTE_URL ? 2000 : 100);
 
 type Row = Record<string, SqlValue>;
+
+const store: SnapshotStore = REMOTE_URL
+  ? new RemoteHttpStore(REMOTE_URL, process.env.DATABASE_REMOTE_TOKEN)
+  : new LocalFileStore(DB_FILE);
 
 const SQL = await initSqlJs({
   locateFile: (file: string) => path.join(path.dirname(require.resolve('sql.js')), file),
 });
 
-fs.mkdirSync(DATA_DIR, { recursive: true });
-
-const dbFileExisted = fs.existsSync(DB_FILE);
-const sqlite: Database = dbFileExisted
-  ? new SQL.Database(fs.readFileSync(DB_FILE))
-  : new SQL.Database();
+const snapshot = await store.load();
+const sqlite: Database = snapshot ? new SQL.Database(snapshot) : new SQL.Database();
 
 sqlite.run(SCHEMA_SQL);
 
 let saveTimer: NodeJS.Timeout | null = null;
 let dirty = false;
+/** Envoi en cours : on n'écrit jamais deux instantanés en parallèle. */
+let saving: Promise<void> | null = null;
+/** Une écriture est arrivée pendant l'envoi : il faudra en refaire un. */
+let resaveNeeded = false;
 
-/** Écriture atomique : fichier temporaire puis renommage. */
-function persist(): void {
-  const tmpFile = `${DB_FILE}.tmp`;
-  fs.writeFileSync(tmpFile, Buffer.from(sqlite.export()));
-  fs.renameSync(tmpFile, DB_FILE);
+async function writeSnapshot(): Promise<void> {
+  // `dirty` est remis à false AVANT l'export : toute écriture survenant pendant
+  // l'envoi doit programmer un nouvel instantané, pas être considérée incluse.
   dirty = false;
+  const data = sqlite.export();
+  try {
+    await store.save(data);
+  } catch (error) {
+    // On se remet en attente : la prochaine écriture, ou l'arrêt, réessaiera.
+    dirty = true;
+    console.error("Sauvegarde de l'instantané échouée :", error);
+  }
+}
+
+async function runSave(): Promise<void> {
+  if (saving) {
+    resaveNeeded = true;
+    return;
+  }
+  saving = writeSnapshot();
+  await saving;
+  saving = null;
+
+  if (resaveNeeded) {
+    resaveNeeded = false;
+    await runSave();
+  }
 }
 
 function scheduleSave(): void {
@@ -60,32 +92,46 @@ function scheduleSave(): void {
   if (saveTimer) return;
   saveTimer = setTimeout(() => {
     saveTimer = null;
-    persist();
+    void runSave();
   }, SAVE_DEBOUNCE_MS);
   saveTimer.unref();
 }
 
-function flush(): void {
-  if (!dirty) return;
+/** Vide la file d'attente et attend que le dernier instantané soit écrit. */
+async function flush(): Promise<void> {
   if (saveTimer) {
     clearTimeout(saveTimer);
     saveTimer = null;
   }
-  persist();
+  if (saving) await saving;
+  if (dirty) await runSave();
 }
 
-if (!dbFileExisted) {
-  persist();
-  console.log(`Base SQLite créée : ${DB_FILE}`);
+if (!snapshot) {
+  await store.save(sqlite.export());
+  console.log(`Base SQLite créée (${store.description})`);
+} else {
+  console.log(`Base SQLite chargée (${store.description})`);
 }
 
-process.on('exit', flush);
+/**
+ * Arrêt propre. Les hébergeurs envoient SIGTERM avant d'éteindre un conteneur,
+ * ce qui laisse le temps d'un dernier envoi réseau.
+ */
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => {
-    flush();
-    process.exit(0);
+    void flush().then(() => process.exit(0));
   });
 }
+
+/**
+ * Dernier filet de sécurité : `exit` interdit toute opération asynchrone, donc
+ * seul le disque local peut encore être sauvé. En stockage distant, la
+ * protection repose entièrement sur les signaux ci-dessus.
+ */
+process.on('exit', () => {
+  if (dirty && store.saveSync) store.saveSync(sqlite.export());
+});
 
 /** SQLite n'accepte que null/number/string/Uint8Array : on normalise le reste. */
 function toSqlValue(value: unknown): SqlValue {
@@ -150,13 +196,13 @@ class DatabaseWrapper {
     sqlite.run(`PRAGMA ${pragma};`);
   }
 
-  /** Force l'écriture immédiate sur disque. */
-  saveToFile(): void {
-    flush();
+  /** Force l'écriture immédiate de l'instantané. */
+  saveToFile(): Promise<void> {
+    return flush();
   }
 
-  close(): void {
-    flush();
+  async close(): Promise<void> {
+    await flush();
     sqlite.close();
   }
 }

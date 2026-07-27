@@ -2,6 +2,7 @@ services:
   - type: web
     name: lumina-api
     env: node
+    plan: free
     # Le service vit dans backend/ : sans rootDir, Render exécute les commandes
     # à la racine du dépôt et ne trouve ni les dépendances ni dist/index.js.
     rootDir: backend
@@ -9,23 +10,30 @@ services:
     startCommand: node dist/index.js
     healthCheckPath: /api/health
 
-    # SQLite écrit dans un fichier : sans disque persistant, le système de fichiers
-    # de Render est réinitialisé à chaque déploiement et TOUTES les données sont perdues.
-    # Un disque impose une instance payante (indisponible sur le plan gratuit).
-    disk:
-      name: lumina-data
-      mountPath: /var/data
-      sizeGB: 1
-
+    # Pas de disque : sur le plan gratuit le système de fichiers est éphémère.
+    # La base SQLite tient en mémoire et est sauvegardée sous forme d'instantané
+    # vers un stockage objet externe (voir DATABASE_REMOTE_URL ci-dessous).
+    #
+    # IMPORTANT : ne jamais passer ce service à plus d'une instance. Deux
+    # instances partageraient le même instantané et s'écraseraient mutuellement.
     envVars:
       - key: NODE_ENV
         value: production
-      - key: DATABASE_PATH
-        value: /var/data/lumina.db
+
+      # URL de l'objet contenant l'instantané SQLite, en lecture/écriture.
+      # Ex. Supabase Storage :
+      #   https://<projet>.supabase.co/storage/v1/object/<bucket>/lumina.db
+      - key: DATABASE_REMOTE_URL
+        sync: false
+      # Jeton porteur associé. Secret : à saisir dans le dashboard Render.
+      - key: DATABASE_REMOTE_TOKEN
+        sync: false
+
       # Généré par Render puis conservé : le régénérer invaliderait
-      # tous les tokens de session émis.
+      # tous les tokens de session déjà émis.
       - key: JWT_SECRET
         generateValue: true
+
       # URL publique du frontend, utilisée pour le CORS et les liens des emails.
       - key: FRONTEND_URL
         sync: false
