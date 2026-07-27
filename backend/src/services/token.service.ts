@@ -60,10 +60,10 @@ export const tokenService = {
    * Validate a token and return the client link if valid
    */
   validate(token: string): ClientLink | null {
-    const stmt = db.prepare(`
+    const stmt = db.prepare<ClientLink>(`
       SELECT * FROM client_links WHERE token = ?
     `);
-    const link = stmt.get(token) as ClientLink | undefined;
+    const link = stmt.get(token);
 
     if (!link) return null;
     if (link.is_revoked) return null;
@@ -82,21 +82,21 @@ export const tokenService = {
    * Get link by client ID
    */
   getByClientId(clientId: string): ClientLink | null {
-    const stmt = db.prepare(`
+    const stmt = db.prepare<ClientLink>(`
       SELECT * FROM client_links
       WHERE client_id = ? AND is_revoked = 0
       ORDER BY created_at DESC
       LIMIT 1
     `);
-    return stmt.get(clientId) as ClientLink | null;
+    return stmt.get(clientId) ?? null;
   },
 
   /**
    * Get link by ID
    */
   getById(id: string): ClientLink | null {
-    const stmt = db.prepare(`SELECT * FROM client_links WHERE id = ?`);
-    return stmt.get(id) as ClientLink | null;
+    const stmt = db.prepare<ClientLink>(`SELECT * FROM client_links WHERE id = ?`);
+    return stmt.get(id) ?? null;
   },
 
   /**
@@ -140,14 +140,14 @@ export const tokenService = {
    * Get all links for a user (photographer)
    */
   getAllForUser(userId: string): ClientLink[] {
-    const stmt = db.prepare(`
+    const stmt = db.prepare<ClientLink>(`
       SELECT cl.*, c.name as client_name, c.email as client_email
       FROM client_links cl
       JOIN clients c ON cl.client_id = c.id
       WHERE cl.user_id = ?
       ORDER BY cl.created_at DESC
     `);
-    return stmt.all(userId) as ClientLink[];
+    return stmt.all(userId);
   }
 };
 

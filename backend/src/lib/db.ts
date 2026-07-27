@@ -31,7 +31,8 @@ const SQL = await initSqlJs({
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
-const sqlite: Database = fs.existsSync(DB_FILE)
+const dbFileExisted = fs.existsSync(DB_FILE);
+const sqlite: Database = dbFileExisted
   ? new SQL.Database(fs.readFileSync(DB_FILE))
   : new SQL.Database();
 
@@ -65,6 +66,11 @@ function flush(): void {
     saveTimer = null;
   }
   persist();
+}
+
+if (!dbFileExisted) {
+  persist();
+  console.log(`Base SQLite créée : ${DB_FILE}`);
 }
 
 process.on('exit', flush);
@@ -117,15 +123,20 @@ class DatabaseWrapper {
     scheduleSave();
   }
 
-  prepare(sql: string) {
+  /**
+   * `T` décrit la forme attendue des lignes : `prepare<Client>('SELECT ...')`
+   * évite un cast au point d'appel. Par défaut, les colonnes brutes.
+   */
+  prepare<T = Row>(sql: string) {
     return {
       run: (...params: unknown[]): { changes: number } => {
         query(sql, params, 'none');
         scheduleSave();
         return { changes: sqlite.getRowsModified() };
       },
-      get: (...params: unknown[]): Row | undefined => query(sql, params, 'first')[0],
-      all: (...params: unknown[]): Row[] => query(sql, params, 'all'),
+      get: (...params: unknown[]): T | undefined =>
+        query(sql, params, 'first')[0] as T | undefined,
+      all: (...params: unknown[]): T[] => query(sql, params, 'all') as unknown as T[],
     };
   }
 

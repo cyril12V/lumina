@@ -102,37 +102,37 @@ export const auditService = {
    * Get audit trail for a client link
    */
   getByClientLink(clientLinkId: string): AuditLog[] {
-    const stmt = db.prepare(`
+    const stmt = db.prepare<AuditLog>(`
       SELECT * FROM audit_logs
       WHERE client_link_id = ?
       ORDER BY created_at DESC
     `);
-    return stmt.all(clientLinkId) as AuditLog[];
+    return stmt.all(clientLinkId);
   },
 
   /**
    * Get audit trail for a user (photographer)
    */
   getByUser(userId: string, limit = 100): AuditLog[] {
-    const stmt = db.prepare(`
+    const stmt = db.prepare<AuditLog>(`
       SELECT * FROM audit_logs
       WHERE user_id = ?
       ORDER BY created_at DESC
       LIMIT ?
     `);
-    return stmt.all(userId, limit) as AuditLog[];
+    return stmt.all(userId, limit);
   },
 
   /**
    * Get audit trail for a specific entity
    */
   getByEntity(entityType: string, entityId: string): AuditLog[] {
-    const stmt = db.prepare(`
+    const stmt = db.prepare<AuditLog>(`
       SELECT * FROM audit_logs
       WHERE entity_type = ? AND entity_id = ?
       ORDER BY created_at DESC
     `);
-    return stmt.all(entityType, entityId) as AuditLog[];
+    return stmt.all(entityType, entityId);
   },
 
   /**
