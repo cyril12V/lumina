@@ -1,0 +1,22 @@
+{
+  "permissions": {},
+  "enabledTools": [],
+  "skills": {
+    "interview": {
+      "path": "/var/www/monppsps/.claude/skills/interview.md",
+      "description": "Mode interview approfondi pour recueillir les besoins avant implementation"
+    },
+    "seo": {
+      "path": "/var/www/monppsps/.claude/skills/seo.md",
+      "description": "Expert SEO senior - strategie et execution orientees resultats business"
+    },
+    "security": {
+      "path": "/var/www/monppsps/.claude/skills/security.md",
+      "description": "Expert securite web/SaaS/API - audit et corrections OWASP"
+    },
+    "uxui": {
+      "path": "/var/www/monppsps/.claude/skills/uxui.md",
+      "description": "Product Designer senior - UX/UI orientee conversion et clarte"
+    }
+  }
+}
