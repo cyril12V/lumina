@@ -25,9 +25,14 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware - CORS configuration
+// En production le frontend est servi par ce même service : les appels sont en
+// même origine et ne passent pas par CORS. On n'ouvre donc que ce que
+// FRONTEND_URL déclare explicitement, pour un frontend hébergé à part.
+const productionOrigins = process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : [];
+
 app.use(cors({
   origin: process.env.NODE_ENV === 'production'
-    ? [process.env.FRONTEND_URL || 'https://lumina-photo.vercel.app', 'https://lumina-api.onrender.com']
+    ? productionOrigins
     : ['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:5173', 'http://127.0.0.1:5173'],
   credentials: true,
 }));
