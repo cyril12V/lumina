@@ -6,6 +6,8 @@ node_modules/
 dist/
 */dist/
 build/
+# Frontend compile, copie dans le backend pour etre servi en production
+backend/public/
 
 # Environment files
 .env
