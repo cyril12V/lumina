@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: lumina-api
+    env: node
+    # Le service vit dans backend/ : sans rootDir, Render exécute les commandes
+    # à la racine du dépôt et ne trouve ni les dépendances ni dist/index.js.
+    rootDir: backend
+    buildCommand: npm ci && npm run build
+    startCommand: node dist/index.js
+    healthCheckPath: /api/health
+
+    # SQLite écrit dans un fichier : sans disque persistant, le système de fichiers
+    # de Render est réinitialisé à chaque déploiement et TOUTES les données sont perdues.
+    # Un disque impose une instance payante (indisponible sur le plan gratuit).
+    disk:
+      name: lumina-data
+      mountPath: /var/data
+      sizeGB: 1
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_PATH
+        value: /var/data/lumina.db
+      # Généré par Render puis conservé : le régénérer invaliderait
+      # tous les tokens de session émis.
+      - key: JWT_SECRET
+        generateValue: true
+      # URL publique du frontend, utilisée pour le CORS et les liens des emails.
+      - key: FRONTEND_URL
+        sync: false

@@ -18,9 +18,15 @@ import { SCHEMA_SQL } from './schema.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 
-/** Résout aussi bien depuis `src/lib` (tsx) que depuis `dist/lib` (build). */
-const DATA_DIR = path.resolve(__dirname, '..', '..', 'data');
-const DB_FILE = path.join(DATA_DIR, 'lumina.db');
+/**
+ * `DATABASE_PATH` permet de pointer vers un volume persistant (Docker, disque Render).
+ * Sans elle, on retombe sur `backend/data/` — le chemin se résout aussi bien depuis
+ * `src/lib` (tsx) que depuis `dist/lib` (build compilé).
+ */
+const DB_FILE = process.env.DATABASE_PATH
+  ? path.resolve(process.env.DATABASE_PATH)
+  : path.resolve(__dirname, '..', '..', 'data', 'lumina.db');
+const DATA_DIR = path.dirname(DB_FILE);
 const SAVE_DEBOUNCE_MS = 100;
 
 type Row = Record<string, SqlValue>;
